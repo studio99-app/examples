@@ -1,0 +1,75 @@
+{% comment %}
+  Studio99 name preview for a personalised product (mugs, frames, nameplates, t-shirts).
+  Put this file in your theme's snippets/ folder and render it inside the product form:
+    {% render 'studio99-name-preview', worker_url: 'https://studio99-preview.YOURNAME.workers.dev' %}
+  The chosen text and style are saved on the order as line-item properties.
+  No API key here: the theme calls your Worker (worker.js), which holds the key.
+{% endcomment %}
+
+<div class="s99-preview" data-worker="{{ worker_url }}">
+  <label>Name for the design
+    <input type="text" name="properties[Name]" maxlength="30" required>
+  </label>
+  <label>Script
+    <select name="properties[Script]">
+      <option value="hindi">Hindi</option>
+      <option value="marathi">Marathi</option>
+      <option value="gujarati">Gujarati</option>
+    </select>
+  </label>
+  <button type="button" class="s99-go">Preview in calligraphy</button>
+  <div class="s99-styles" role="radiogroup" aria-label="Calligraphy style"></div>
+  <input type="hidden" name="properties[_Calligraphy style]" value="">
+  <input type="hidden" name="properties[Calligraphy text]" value="">
+</div>
+
+<style>
+  .s99-preview { display: grid; gap: 8px; margin: 16px 0; }
+  .s99-styles { display: flex; flex-wrap: wrap; gap: 8px; }
+  .s99-styles button { background: #fff; border: 2px solid #ddd; padding: 6px; cursor: pointer; }
+  .s99-styles button[aria-checked="true"] { border-color: currentColor; }
+  .s99-styles img { height: 56px; max-width: 220px; object-fit: contain; display: block; }
+</style>
+
+<script>
+  (function () {
+    var root = document.currentScript.previousElementSibling.previousElementSibling;
+    var input = root.querySelector('input[name="properties[Name]"]');
+    var script = root.querySelector('select');
+    var styles = root.querySelector('.s99-styles');
+    var styleField = root.querySelector('input[name="properties[_Calligraphy style]"]');
+    var textField = root.querySelector('input[name="properties[Calligraphy text]"]');
+
+    root.querySelector('.s99-go').addEventListener('click', function () {
+      styles.textContent = 'Creating…';
+      fetch(root.dataset.worker, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: input.value, language: script.value })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (json) {
+          styles.textContent = '';
+          if (json.error) { styles.textContent = json.error; return; }
+          json.previews.forEach(function (p, i) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.setAttribute('role', 'radio');
+            var img = document.createElement('img');
+            img.src = p.src;            // always an <img>: image content can never run script
+            img.alt = p.text;
+            b.appendChild(img);
+            b.addEventListener('click', function () {
+              styles.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-checked', 'false'); });
+              b.setAttribute('aria-checked', 'true');
+              styleField.value = p.fontId;  // your team re-renders this exact style for production
+              textField.value = p.text;
+            });
+            styles.appendChild(b);
+            if (i === 0) b.click();
+          });
+        })
+        .catch(function () { styles.textContent = 'Preview unavailable, please try again.'; });
+    });
+  })();
+</script>
